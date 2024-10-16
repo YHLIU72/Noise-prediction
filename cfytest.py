@@ -1,93 +1,90 @@
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import webbrowser
 import os
 
-# 设置文件路径
-file_path = 'data_after.xlsx'
+def create_3d_plot(sheet_data, sheet_name):
+    # 定义从蓝色到红色的颜色范围
+    colorscale = [
+        [0, "rgb(0,0,255)"],
+        [0.25, "rgb(0,255,255)"],
+        [0.5, "rgb(0,255,0)"],
+        [0.75, "rgb(255,255,0)"],
+        [1, "rgb(255,0,0)"]
+    ]
 
-# 定义sheet名称和数据列名称
-sheet_names = ['CVAF', 'CVAR', 'HFF', 'HDF']
-data_names = ['Qv', 'DP', 'RPM', 'M1']
+    fig = go.Figure()#提供一个画布
 
-# 读取数据
-mode_data = {}
-for sheet_name in sheet_names:
-    df = pd.read_excel(file_path, sheet_name=sheet_name)
-    mode_data[sheet_name] = {
-        data_name: df[data_name].tolist() for data_name in data_names
-    }
-print(mode_data)
-# 创建子图
-fig = make_subplots(
-    rows=2, cols=2,
-    specs=[[{'type': 'scene'}, {'type': 'scene'}],
-           [{'type': 'scene'}, {'type': 'scene'}]],
-    subplot_titles=sheet_names,  # 使用sheet名称作为子图标题
-    horizontal_spacing=0.05,  # 减小水平间距
-    vertical_spacing=0.05     # 减小垂直间距
-)
+    for t in sheet_data['types']:
+        data = sheet_data['data'][t]
+        
+        scatter = go.Scatter3d(
+            x=data['Qv'],
+            y=data['DP'],
+            z=data['RPM'],
+            mode='markers',
+            marker=dict(
+                size=5,#点的大小
+                color=data['M1'],#根据M1的数据值确定颜色
+                colorscale=colorscale,#设定颜色条
+                colorbar=dict(title='M1'),#颜色条标题M1
+                showscale=True#默认颜色条显示
+            ),
+            text=[f'Type: {t}, M1: {m1}' for m1 in data['M1']],
+            hoverinfo='text',
+            name=t,
+            visible=True  # 默认所有type都可见
+        )
+        
+        fig.add_trace(scatter)
 
-# 定义从蓝色到红色的颜色范围
-colorscale = [
-    [0, "rgb(0,0,255)"],      # 蓝色
-    [0.25, "rgb(0,255,255)"], # 青色
-    [0.5, "rgb(0,255,0)"],    # 绿色
-    [0.75, "rgb(255,255,0)"], # 黄色
-    [1, "rgb(255,0,0)"]       # 红色
-]
-
-# 为每个模式创建3D散点图
-for i, sheet_name in enumerate(sheet_names):
-    row = i // 2 + 1
-    col = i % 2 + 1
-    
-    data = mode_data[sheet_name]
-    
-    scatter = go.Scatter3d(
-        x=data['Qv'],
-        y=data['DP'],
-        z=data['RPM'],
-        mode='markers',
-        marker=dict(
-            size=5,
-            color=data['M1'],
-            colorscale=colorscale,
-            colorbar=dict(title='M1', len=0.6),  # 调整颜色条长度
-            showscale=True
+    # 更新布局
+    fig.update_layout(
+        scene=dict(
+            xaxis_title='Qv',
+            yaxis_title='DP',
+            zaxis_title='RPM',
+            aspectmode='cube'
         ),
-        text=[f'M1: {m1}' for m1 in data['M1']],
-        hoverinfo='text',
-        name=sheet_name  # 设置trace的名称为sheet名
-    )
-    
-    fig.add_trace(scatter, row=row, col=col)
-    
-    fig.update_scenes(
-        xaxis_title='Qv',
-        yaxis_title='DP',
-        zaxis_title='RPM',
-        aspectmode='cube',  # 保持坐标轴比例一致
-        row=row, col=col
+        title=f'3D Visualization of {sheet_name}: Qv, DP, RPM, and M1',
+        height=900,  # 增加高度
+        width=1600,  # 增加宽度
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01
+        ),
+        margin=dict(l=0, r=0, t=40, b=0)  # 减小边距
     )
 
-# 更新布局
-fig.update_layout(
-    title='4D Visualization of Qv, DP, RPM, and M1',
-    height=1200,  # 增加高度
-    width=1600,   # 增加宽度
-    margin=dict(l=0, r=0, t=50, b=0)  # 减小边距
-)
+    return fig
 
-# 调整子图标题的位置和样式
-for i in fig['layout']['annotations']:
-    i['font'] = dict(size=16, color='black', family="Arial, sans-serif")
-    i['y'] = i['y'] - 0.05  # 稍微降低标题位置
+def main():
+    # 设置文件路径
+    file_path = 'data_after.xlsx'
 
-# 保存为HTML文件
-output_path = 'data preprocessing.html'
-fig.write_html(output_path)
+    # 定义sheet名称
+    sheet_names = ['CVAF', 'CVAR', 'HFF', 'HDF']
 
-# 自动打开生成的HTML文件
-webbrowser.open('file://' + os.path.realpath(output_path))
+    for sheet_name in sheet_names:
+        # 读取数据
+        df = pd.read_excel(file_path, sheet_name=sheet_name)
+        types = df['type'].unique().tolist()
+        sheet_data = {
+            'types': types,
+            'data': {t: df[df['type'] == t] for t in types}
+        }
+
+        # 创建3D图
+        fig = create_3d_plot(sheet_data, sheet_name)
+
+        # 保存为HTML文件，使用相对路径
+        output_path = f'3D_plot_{sheet_name}.html'
+        fig.write_html(output_path, full_html=False, include_plotlyjs='cdn')
+
+        # 自动打开生成的HTML文件
+        webbrowser.open('file://' + os.path.abspath(output_path))
+
+if __name__ == "__main__":
+    main()
